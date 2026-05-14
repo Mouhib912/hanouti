@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 import { canTransitionOrderStatus } from "@/shared/const";
 
 const STATUSES: OrderStatus[] = ["pending", "confirmed", "ready", "delivered", "cancelled"];
@@ -188,7 +189,7 @@ export default function OrderDetailScreen() {
           })}
           <View className="flex-row justify-between pt-2 mt-1 border-t border-border">
             <Text className="text-foreground font-semibold">Total</Text>
-            <Text className="text-foreground font-semibold">${order.totalPrice}</Text>
+            <Text className="text-foreground font-semibold">{formatPrice(order.totalPrice)}</Text>
           </View>
         </View>
 

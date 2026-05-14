@@ -18,6 +18,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge, type OrderStatus } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 import { canTransitionOrderStatus } from "@/shared/const";
 
 const STATUSES: OrderStatus[] = ["pending", "confirmed", "ready", "delivered", "cancelled"];
@@ -132,7 +133,7 @@ export default function ProviderOrdersScreen() {
                       </Text>
                       <Text className="text-muted text-sm">·</Text>
                       <Text className="text-foreground font-semibold text-sm">
-                        ${item.totalPrice}
+                        {formatPrice(item.totalPrice)}
                       </Text>
                     </View>
                     <View className="flex-row items-start gap-2">

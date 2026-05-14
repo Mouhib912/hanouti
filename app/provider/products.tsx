@@ -21,6 +21,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 
 export default function ProviderProductsScreen() {
   const router = useRouter();
@@ -255,7 +256,7 @@ export default function ProviderProductsScreen() {
                       </Text>
                     </View>
                     <Text className="text-muted text-xs">·</Text>
-                    <Text className="text-foreground font-semibold text-sm">${item.price}</Text>
+                    <Text className="text-foreground font-semibold text-sm">{formatPrice(item.price)}</Text>
                     <Text className="text-muted text-xs">·</Text>
                     <Text className="text-muted text-xs">qty {item.quantity ?? 0}</Text>
                   </View>

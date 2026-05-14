@@ -18,6 +18,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 
 function initialsOf(name: string) {
   return name
@@ -136,7 +137,7 @@ export default function BuyerProvidersScreen() {
                           {p.name}
                         </Text>
                         <Text className="text-muted text-xs" numberOfLines={1}>
-                          {p.providerBusinessName} · ${p.price}
+                          {p.providerBusinessName} · {formatPrice(p.price)}
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={colors["muted-soft"]} />

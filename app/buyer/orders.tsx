@@ -15,6 +15,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge, type OrderStatus } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 
 export default function BuyerOrdersScreen() {
   const colors = useColors();
@@ -65,7 +66,7 @@ export default function BuyerOrdersScreen() {
                     {item.items.length} item{item.items.length === 1 ? "" : "s"}
                   </Text>
                   <Text className="text-muted text-sm">·</Text>
-                  <Text className="text-foreground font-semibold text-sm">${item.totalPrice}</Text>
+                  <Text className="text-foreground font-semibold text-sm">{formatPrice(item.totalPrice)}</Text>
                 </View>
                 <View className="flex-row items-start gap-2">
                   <Ionicons

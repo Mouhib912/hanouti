@@ -17,6 +17,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 
 export default function ProviderCatalogScreen() {
   const router = useRouter();
@@ -186,7 +187,7 @@ export default function ProviderCatalogScreen() {
                     <Text className="text-foreground font-semibold" numberOfLines={1}>
                       {p.name}
                     </Text>
-                    <Text className="text-foreground text-lg font-bold mt-0.5">${p.price}</Text>
+                    <Text className="text-foreground text-lg font-bold mt-0.5">{formatPrice(p.price)}</Text>
                     {!p.inStock ? (
                       <View className="flex-row items-center gap-1 mt-1">
                         <View className="w-1.5 h-1.5 rounded-full bg-error" />

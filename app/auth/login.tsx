@@ -109,9 +109,10 @@ export default function LoginScreen() {
             <View className="gap-3 mb-5">
               <Field
                 icon="call-outline"
-                placeholder="Phone number"
+                placeholder="Phone (8 digits, e.g. 55 123 456)"
                 keyboardType="phone-pad"
                 autoComplete="tel"
+                maxLength={20}
                 value={phone}
                 onChangeText={setPhone}
               />

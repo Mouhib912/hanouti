@@ -18,6 +18,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 
 type DetailedItem = {
   cartItemId: number;
@@ -149,7 +150,7 @@ export default function BuyerCartScreen() {
               <View>
                 <Text className="text-muted text-xs uppercase tracking-wider">Cart total</Text>
                 <Text className="text-foreground text-2xl font-bold mt-1">
-                  ${grandTotal.toFixed(2)}
+                  {formatPrice(grandTotal)}
                 </Text>
               </View>
               <View className="bg-background rounded-full px-3 py-1.5 border border-border">
@@ -250,7 +251,7 @@ function ProviderCartBlock({
                 {it.productName}
               </Text>
               <Text className="text-muted text-xs">
-                ${it.price} · ${(Number(it.price) * it.quantity).toFixed(2)}
+                {formatPrice(it.price)} · {formatPrice(Number(it.price) * it.quantity)}
               </Text>
             </View>
             <View className="flex-row items-center bg-background border border-border rounded-full">
@@ -284,7 +285,7 @@ function ProviderCartBlock({
       <View className="border-t border-border px-4 py-3">
         <View className="flex-row items-center justify-between">
           <Text className="text-muted text-sm">Subtotal</Text>
-          <Text className="text-foreground font-bold text-lg">${group.total.toFixed(2)}</Text>
+          <Text className="text-foreground font-bold text-lg">{formatPrice(group.total)}</Text>
         </View>
 
         {showCheckout ? (

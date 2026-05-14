@@ -228,9 +228,10 @@ export default function RegisterScreen() {
             <View className="gap-3">
               <FormField
                 icon="call-outline"
-                placeholder="Phone number"
+                placeholder="Phone (8 digits, e.g. 55 123 456)"
                 keyboardType="phone-pad"
                 autoComplete="tel"
+                maxLength={20}
                 value={phone}
                 onChangeText={setPhone}
               />

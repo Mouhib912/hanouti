@@ -15,6 +15,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
+import { formatPrice } from "@/lib/utils";
 
 export default function BuyerProductDetailScreen() {
   const router = useRouter();
@@ -88,7 +89,7 @@ export default function BuyerProductDetailScreen() {
           <View className="flex-row items-start gap-3">
             <View className="flex-1">
               <Text className="text-foreground text-2xl font-bold">{product.name}</Text>
-              <Text className="text-primary text-2xl font-bold mt-1">${product.price}</Text>
+              <Text className="text-primary text-2xl font-bold mt-1">{formatPrice(product.price)}</Text>
             </View>
             <View
               className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${
@@ -177,7 +178,7 @@ export default function BuyerProductDetailScreen() {
       <View className="absolute left-5 right-5 bottom-5 bg-background-elevated border border-border rounded-3xl px-4 py-3 flex-row items-center gap-3">
         <View>
           <Text className="text-muted text-[11px] uppercase tracking-wider">Total</Text>
-          <Text className="text-foreground text-xl font-bold">${lineTotal.toFixed(2)}</Text>
+          <Text className="text-foreground text-xl font-bold">{formatPrice(lineTotal)}</Text>
         </View>
         <TouchableOpacity
           className="flex-1 bg-primary rounded-2xl py-3.5 items-center flex-row justify-center gap-2 active:opacity-80 disabled:opacity-40"

@@ -5,10 +5,15 @@ import * as db from "../db";
 import { authenticateRequest, hashPassword, signSession, verifyPassword } from "./auth";
 import { getSessionCookieOptions } from "./cookies";
 
+// Tunisian mobile: 8 digits, leading digit 2-9. Accepts optional +216/216 prefix
+// plus spaces/hyphens/dots which are stripped before validation.
 const phoneSchema = z
   .string()
   .trim()
-  .regex(/^\d{6,15}$/, "Phone must be 6-15 digits");
+  .transform((s) => s.replace(/[\s\-.]/g, "").replace(/^\+?216/, ""))
+  .refine((s) => /^[2-9]\d{7}$/.test(s), {
+    message: "Numéro tunisien (8 chiffres, ex: 55 123 456)",
+  });
 const passwordSchema = z.string().min(8).max(128);
 
 const registerSchema = z.object({
