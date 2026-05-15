@@ -321,14 +321,50 @@ export async function getProviderOrders(providerId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return db.select().from(orders).where(eq(orders.providerId, providerId));
+  // Joined with the buyer's business name so the orders list can filter and
+  // display "from <buyer>" without a second roundtrip.
+  return db
+    .select({
+      id: orders.id,
+      buyerId: orders.buyerId,
+      providerId: orders.providerId,
+      status: orders.status,
+      totalPrice: orders.totalPrice,
+      deliveryAddress: orders.deliveryAddress,
+      items: orders.items,
+      notes: orders.notes,
+      createdAt: orders.createdAt,
+      updatedAt: orders.updatedAt,
+      buyerBusinessName: userProfiles.businessName,
+    })
+    .from(orders)
+    .leftJoin(userProfiles, eq(userProfiles.userId, orders.buyerId))
+    .where(eq(orders.providerId, providerId));
 }
 
 export async function getBuyerOrders(buyerId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return db.select().from(orders).where(eq(orders.buyerId, buyerId));
+  // Joined with the supplier's business name so buyer-side filters can target
+  // a specific supplier and the list can show "to <supplier>" inline.
+  return db
+    .select({
+      id: orders.id,
+      buyerId: orders.buyerId,
+      providerId: orders.providerId,
+      status: orders.status,
+      totalPrice: orders.totalPrice,
+      deliveryAddress: orders.deliveryAddress,
+      items: orders.items,
+      notes: orders.notes,
+      createdAt: orders.createdAt,
+      updatedAt: orders.updatedAt,
+      providerBusinessName: userProfiles.businessName,
+    })
+    .from(orders)
+    .leftJoin(userProfiles, eq(userProfiles.userId, orders.providerId))
+    .where(eq(orders.buyerId, buyerId));
 }
 
 export async function getOrder(orderId: number) {

@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, Stack, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from "react-native-reanimated";
@@ -14,10 +17,27 @@ import { Card, Pill } from "@/components/receipt-card";
 import { EmptyState } from "@/components/empty-state";
 import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge, type OrderStatus } from "@/components/status-badge";
-import { Body, BodyBold, Display, DisplaySm, Label, Mono, MonoBold } from "@/components/typography";
+import {
+  Body,
+  BodyBold,
+  Display,
+  DisplaySm,
+  Label,
+  Mono,
+  MonoBold,
+} from "@/components/typography";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { formatPrice } from "@/lib/utils";
+
+type StatusFilter = "active" | "delivered" | "cancelled" | "all";
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "active", label: "Active" },
+  { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "all", label: "All" },
+];
 
 export default function BuyerOrdersScreen() {
   const colors = useColors();
@@ -26,10 +46,63 @@ export default function BuyerOrdersScreen() {
     refetchInterval: 15_000,
   });
 
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
+  const [supplierFilter, setSupplierFilter] = useState<number | "all">("all");
+  const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+
   const orders = ordersQ.data ?? [];
+
+  // Distinct suppliers from the orders list — for the supplier filter pills.
+  const suppliers = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const o of orders) {
+      if (!seen.has(o.providerId)) {
+        seen.set(o.providerId, o.providerBusinessName ?? `Supplier #${o.providerId}`);
+      }
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [orders]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return orders.filter((o) => {
+      // Status
+      if (statusFilter === "active") {
+        if (o.status === "delivered" || o.status === "cancelled") return false;
+      } else if (statusFilter !== "all" && o.status !== statusFilter) {
+        return false;
+      }
+      // Supplier
+      if (supplierFilter !== "all" && o.providerId !== supplierFilter) return false;
+      // Search (order id, supplier name, address, notes)
+      if (q) {
+        const hay = [
+          String(o.id),
+          o.providerBusinessName ?? "",
+          o.deliveryAddress,
+          o.notes ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [orders, statusFilter, supplierFilter, query]);
+
   const activeCount = orders.filter(
     (o) => o.status !== "delivered" && o.status !== "cancelled",
   ).length;
+
+  const filtersActive =
+    statusFilter !== "active" || supplierFilter !== "all" || query.trim().length > 0;
+
+  const clearFilters = () => {
+    setStatusFilter("active");
+    setSupplierFilter("all");
+    setQuery("");
+  };
 
   return (
     <ScreenContainer>
@@ -81,13 +154,135 @@ export default function BuyerOrdersScreen() {
             </Body>
           )}
         </Animated.View>
+
+        {/* Search */}
+        {orders.length > 0 ? (
+          <Animated.View entering={FadeInUp.duration(360).delay(80)} className="mt-5">
+            <View
+              className="flex-row items-center rounded-2xl px-4"
+              style={{
+                backgroundColor: colors["background-elevated"],
+                borderWidth: 1.5,
+                borderColor: searchFocused ? colors.primary : colors["border-soft"],
+              }}
+            >
+              <Ionicons
+                name="search"
+                size={18}
+                color={searchFocused ? colors.primary : colors.muted}
+              />
+              <TextInput
+                className="flex-1 py-3 pl-3 font-body"
+                style={{ color: colors.foreground }}
+                placeholder="Search order #, supplier, address…"
+                placeholderTextColor={colors["muted-soft"]}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery("")} hitSlop={8} className="active:opacity-60">
+                  <Ionicons name="close-circle" size={18} color={colors["muted-soft"]} />
+                </Pressable>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
+
+        {/* Status filter */}
+        {orders.length > 0 ? (
+          <Animated.View entering={FadeInUp.duration(360).delay(120)} className="mt-4 -mx-5">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+            >
+              {STATUS_FILTERS.map((f) => {
+                const active = statusFilter === f.key;
+                const count =
+                  f.key === "all"
+                    ? orders.length
+                    : f.key === "active"
+                      ? activeCount
+                      : orders.filter((o) => o.status === f.key).length;
+                return (
+                  <Pressable
+                    key={f.key}
+                    onPress={() => setStatusFilter(f.key)}
+                    className="active:opacity-80"
+                  >
+                    <View
+                      className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full"
+                      style={{
+                        backgroundColor: active ? colors.foreground : colors["background-elevated"],
+                        borderWidth: 1.5,
+                        borderColor: active ? colors.foreground : colors["border-soft"],
+                      }}
+                    >
+                      <BodyBold
+                        className="text-[12px]"
+                        style={{ color: active ? colors.background : colors.foreground }}
+                      >
+                        {f.label}
+                      </BodyBold>
+                      <MonoBold
+                        className="text-[10px]"
+                        style={{
+                          color: active ? colors.background : colors.muted,
+                          opacity: active ? 0.7 : 1,
+                        }}
+                      >
+                        {count}
+                      </MonoBold>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        ) : null}
+
+        {/* Supplier filter */}
+        {suppliers.length > 1 ? (
+          <Animated.View entering={FadeInUp.duration(360).delay(160)} className="mt-3 -mx-5">
+            <View className="px-5 mb-2">
+              <Label>FROM · SUPPLIER</Label>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+            >
+              <SupplierChip
+                label="All suppliers"
+                count={orders.length}
+                active={supplierFilter === "all"}
+                onPress={() => setSupplierFilter("all")}
+              />
+              {suppliers.map((s) => {
+                const count = orders.filter((o) => o.providerId === s.id).length;
+                return (
+                  <SupplierChip
+                    key={s.id}
+                    label={s.name}
+                    count={count}
+                    active={supplierFilter === s.id}
+                    onPress={() => setSupplierFilter(s.id)}
+                  />
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        ) : null}
       </View>
 
       {ordersQ.isLoading ? (
         <ActivityIndicator color={colors.primary} className="mt-12" />
       ) : (
         <FlatList
-          data={orders}
+          data={filtered}
           keyExtractor={(o) => String(o.id)}
           ItemSeparatorComponent={() => <View className="h-3" />}
           contentContainerStyle={{
@@ -104,11 +299,37 @@ export default function BuyerOrdersScreen() {
           }
           ListEmptyComponent={
             <Animated.View entering={FadeInUp.duration(420).delay(80)}>
-              <EmptyState
-                icon="receipt-outline"
-                title="No orders yet"
-                description="When you check out from a supplier, your orders will appear here."
-              />
+              {orders.length === 0 ? (
+                <EmptyState
+                  icon="receipt-outline"
+                  title="No orders yet"
+                  description="When you check out from a supplier, your orders will appear here."
+                />
+              ) : (
+                <EmptyState
+                  icon="filter-outline"
+                  title="No orders match"
+                  description={
+                    filtersActive
+                      ? "Try a different status, supplier, or search."
+                      : "Try a different search."
+                  }
+                  action={
+                    filtersActive ? (
+                      <Pressable onPress={clearFilters} className="active:opacity-85">
+                        <Card raised className="px-4 py-2">
+                          <MonoBold
+                            className="text-[11px]"
+                            style={{ color: colors.foreground, letterSpacing: 1.2 }}
+                          >
+                            CLEAR FILTERS
+                          </MonoBold>
+                        </Card>
+                      </Pressable>
+                    ) : null
+                  }
+                />
+              )}
             </Animated.View>
           }
           renderItem={({ item, index }) => (
@@ -134,6 +355,23 @@ export default function BuyerOrdersScreen() {
                       </View>
                       <StatusBadge status={item.status as OrderStatus} />
                     </View>
+
+                    {/* Supplier line */}
+                    {item.providerBusinessName ? (
+                      <View className="flex-row items-center gap-1.5 mb-2">
+                        <Ionicons
+                          name="storefront"
+                          size={11}
+                          color={colors.primary}
+                        />
+                        <BodyBold
+                          className="text-foreground text-[13px]"
+                          numberOfLines={1}
+                        >
+                          {item.providerBusinessName}
+                        </BodyBold>
+                      </View>
+                    ) : null}
 
                     <View className="flex-row items-end justify-between mt-1">
                       <View className="flex-1 pr-3">
@@ -177,5 +415,48 @@ export default function BuyerOrdersScreen() {
         />
       )}
     </ScreenContainer>
+  );
+}
+
+function SupplierChip({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable onPress={onPress} className="active:opacity-80">
+      <View
+        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
+        style={{
+          backgroundColor: active ? colors.primary : colors["background-elevated"],
+          borderWidth: 1.5,
+          borderColor: active ? colors.primary : colors["border-soft"],
+        }}
+      >
+        <Body
+          className="text-[12px]"
+          style={{ color: active ? colors.background : colors.foreground }}
+          numberOfLines={1}
+        >
+          {label}
+        </Body>
+        <MonoBold
+          className="text-[10px]"
+          style={{
+            color: active ? colors.background : colors.muted,
+            opacity: active ? 0.8 : 1,
+          }}
+        >
+          {count}
+        </MonoBold>
+      </View>
+    </Pressable>
   );
 }

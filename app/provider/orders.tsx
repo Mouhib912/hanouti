@@ -9,6 +9,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from "react-native-reanimated";
@@ -55,20 +56,62 @@ export default function ProviderOrdersScreen() {
     },
   });
 
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("open");
+  const [statusFilter, setStatusFilter] = useState<(typeof FILTERS)[number]["key"]>("open");
+  const [buyerFilter, setBuyerFilter] = useState<number | "all">("all");
+  const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const orders = ordersQ.data ?? [];
   const openCount = orders.filter(
     (o) => o.status !== "delivered" && o.status !== "cancelled",
   ).length;
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return orders;
-    if (filter === "open") {
-      return orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
+  // Distinct buyers in this provider's orders, for the buyer filter pills.
+  const buyers = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const o of orders) {
+      if (!seen.has(o.buyerId)) {
+        seen.set(o.buyerId, o.buyerBusinessName ?? `Buyer #${o.buyerId}`);
+      }
     }
-    return orders.filter((o) => o.status === filter);
-  }, [orders, filter]);
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [orders]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return orders.filter((o) => {
+      // Status
+      if (statusFilter === "open") {
+        if (o.status === "delivered" || o.status === "cancelled") return false;
+      } else if (statusFilter !== "all" && o.status !== statusFilter) {
+        return false;
+      }
+      // Buyer
+      if (buyerFilter !== "all" && o.buyerId !== buyerFilter) return false;
+      // Search
+      if (q) {
+        const hay = [
+          String(o.id),
+          o.buyerBusinessName ?? "",
+          o.deliveryAddress,
+          o.notes ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [orders, statusFilter, buyerFilter, query]);
+
+  const filtersActive =
+    statusFilter !== "open" || buyerFilter !== "all" || query.trim().length > 0;
+
+  const clearFilters = () => {
+    setStatusFilter("open");
+    setBuyerFilter("all");
+    setQuery("");
+  };
 
   return (
     <ScreenContainer>
@@ -115,15 +158,51 @@ export default function ProviderOrdersScreen() {
           </Body>
         </Animated.View>
 
-        {/* Filter pills */}
-        <Animated.View entering={FadeInUp.duration(420).delay(80)} className="mt-5 -mx-5">
+        {/* Search */}
+        {orders.length > 0 ? (
+          <Animated.View entering={FadeInUp.duration(360).delay(80)} className="mt-5">
+            <View
+              className="flex-row items-center rounded-2xl px-4"
+              style={{
+                backgroundColor: colors["background-elevated"],
+                borderWidth: 1.5,
+                borderColor: searchFocused ? colors.primary : colors["border-soft"],
+              }}
+            >
+              <Ionicons
+                name="search"
+                size={18}
+                color={searchFocused ? colors.primary : colors.muted}
+              />
+              <TextInput
+                className="flex-1 py-3 pl-3 font-body"
+                style={{ color: colors.foreground }}
+                placeholder="Search order #, buyer, address…"
+                placeholderTextColor={colors["muted-soft"]}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery("")} hitSlop={8} className="active:opacity-60">
+                  <Ionicons name="close-circle" size={18} color={colors["muted-soft"]} />
+                </Pressable>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
+
+        {/* Status filter pills */}
+        <Animated.View entering={FadeInUp.duration(420).delay(120)} className="mt-4 -mx-5">
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
           >
             {FILTERS.map((f) => {
-              const active = filter === f.key;
+              const active = statusFilter === f.key;
               const count =
                 f.key === "all"
                   ? orders.length
@@ -133,7 +212,7 @@ export default function ProviderOrdersScreen() {
               return (
                 <Pressable
                   key={f.key}
-                  onPress={() => setFilter(f.key)}
+                  onPress={() => setStatusFilter(f.key)}
                   className="active:opacity-80"
                 >
                   <View
@@ -167,6 +246,39 @@ export default function ProviderOrdersScreen() {
             })}
           </ScrollView>
         </Animated.View>
+
+        {/* Buyer filter pills */}
+        {buyers.length > 1 ? (
+          <Animated.View entering={FadeInUp.duration(360).delay(160)} className="mt-3 -mx-5">
+            <View className="px-5 mb-2">
+              <Label>FROM · BUYER</Label>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+            >
+              <BuyerChip
+                label="All buyers"
+                count={orders.length}
+                active={buyerFilter === "all"}
+                onPress={() => setBuyerFilter("all")}
+              />
+              {buyers.map((b) => {
+                const count = orders.filter((o) => o.buyerId === b.id).length;
+                return (
+                  <BuyerChip
+                    key={b.id}
+                    label={b.name}
+                    count={count}
+                    active={buyerFilter === b.id}
+                    onPress={() => setBuyerFilter(b.id)}
+                  />
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        ) : null}
       </View>
 
       {ordersQ.isLoading ? (
@@ -190,15 +302,33 @@ export default function ProviderOrdersScreen() {
           }
           ListEmptyComponent={
             <Animated.View entering={FadeInUp.duration(420).delay(60)}>
-              <EmptyState
-                icon="receipt-outline"
-                title="No orders here"
-                description={
-                  filter === "open"
-                    ? "New orders will appear when buyers check out."
-                    : "Try a different filter to find orders."
-                }
-              />
+              {orders.length === 0 ? (
+                <EmptyState
+                  icon="receipt-outline"
+                  title="No orders here"
+                  description="New orders will appear when buyers check out."
+                />
+              ) : (
+                <EmptyState
+                  icon="filter-outline"
+                  title="No orders match"
+                  description="Try a different status, buyer, or search."
+                  action={
+                    filtersActive ? (
+                      <Pressable onPress={clearFilters} className="active:opacity-85">
+                        <Card raised className="px-4 py-2">
+                          <MonoBold
+                            className="text-[11px]"
+                            style={{ color: colors.foreground, letterSpacing: 1.2 }}
+                          >
+                            CLEAR FILTERS
+                          </MonoBold>
+                        </Card>
+                      </Pressable>
+                    ) : null
+                  }
+                />
+              )}
             </Animated.View>
           }
           renderItem={({ item, index }) => {
@@ -229,6 +359,19 @@ export default function ProviderOrdersScreen() {
                           </View>
                           <StatusBadge status={status} />
                         </View>
+
+                        {/* Buyer line */}
+                        {item.buyerBusinessName ? (
+                          <View className="flex-row items-center gap-1.5 mb-2">
+                            <Ionicons name="person" size={11} color={colors.primary} />
+                            <BodyBold
+                              className="text-foreground text-[13px]"
+                              numberOfLines={1}
+                            >
+                              {item.buyerBusinessName}
+                            </BodyBold>
+                          </View>
+                        ) : null}
 
                         <View className="flex-row items-end justify-between mt-1">
                           <View className="flex-1 pr-3">
@@ -339,5 +482,48 @@ export default function ProviderOrdersScreen() {
         />
       )}
     </ScreenContainer>
+  );
+}
+
+function BuyerChip({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable onPress={onPress} className="active:opacity-80">
+      <View
+        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
+        style={{
+          backgroundColor: active ? colors.primary : colors["background-elevated"],
+          borderWidth: 1.5,
+          borderColor: active ? colors.primary : colors["border-soft"],
+        }}
+      >
+        <Body
+          className="text-[12px]"
+          style={{ color: active ? colors.background : colors.foreground }}
+          numberOfLines={1}
+        >
+          {label}
+        </Body>
+        <MonoBold
+          className="text-[10px]"
+          style={{
+            color: active ? colors.background : colors.muted,
+            opacity: active ? 0.8 : 1,
+          }}
+        >
+          {count}
+        </MonoBold>
+      </View>
+    </Pressable>
   );
 }
