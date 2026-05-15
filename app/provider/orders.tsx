@@ -1,21 +1,31 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Link, Stack } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Link, Stack, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   ScrollView,
-  Text,
-  TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from "react-native-reanimated";
 
+import { Card, Pill } from "@/components/receipt-card";
 import { EmptyState } from "@/components/empty-state";
 import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge, type OrderStatus } from "@/components/status-badge";
+import {
+  Body,
+  BodyBold,
+  Display,
+  DisplaySm,
+  Label,
+  Mono,
+  MonoBold,
+} from "@/components/typography";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { formatPrice } from "@/lib/utils";
@@ -33,6 +43,7 @@ const FILTERS: { key: "open" | OrderStatus | "all"; label: string }[] = [
 
 export default function ProviderOrdersScreen() {
   const colors = useColors();
+  const router = useRouter();
   const utils = trpc.useUtils();
   const ordersQ = trpc.orders.listProvider.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -46,44 +57,116 @@ export default function ProviderOrdersScreen() {
 
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("open");
 
+  const orders = ordersQ.data ?? [];
+  const openCount = orders.filter(
+    (o) => o.status !== "delivered" && o.status !== "cancelled",
+  ).length;
+
   const filtered = useMemo(() => {
-    const data = ordersQ.data ?? [];
-    if (filter === "all") return data;
+    if (filter === "all") return orders;
     if (filter === "open") {
-      return data.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
+      return orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
     }
-    return data.filter((o) => o.status === filter);
-  }, [ordersQ.data, filter]);
+    return orders.filter((o) => o.status === filter);
+  }, [orders, filter]);
 
   return (
-    <ScreenContainer className="px-5">
-      <Stack.Screen options={{ title: "Orders", headerShown: true }} />
+    <ScreenContainer>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <View className="pt-3 pb-2">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {FILTERS.map((f) => {
-            const active = filter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setFilter(f.key)}
-                className={`px-3.5 py-1.5 rounded-full border ${
-                  active ? "bg-foreground border-foreground" : "bg-surface border-border"
-                }`}
+      <LinearGradient
+        colors={[colors.primary + "1A", colors.background + "00"]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 1, y: 0.7 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 260 }}
+        pointerEvents="none"
+      />
+
+      <View className="px-5 pt-3">
+        <Animated.View entering={FadeInDown.duration(360)}>
+          <View className="flex-row items-center justify-between pt-2">
+            <Pressable
+              onPress={() => router.back()}
+              className="w-10 h-10 rounded-full items-center justify-center bg-surface active:opacity-70"
+              hitSlop={6}
+            >
+              <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+            </Pressable>
+            <Pill intent="ghost">
+              <Ionicons name="receipt" size={11} color={colors.primary} />
+              <Label className="text-foreground">INCOMING</Label>
+            </Pill>
+          </View>
+
+          <View className="mt-5 mb-1">
+            <Display className="text-foreground text-[36px] leading-[40px]">
+              Incoming{" "}
+              <Display
+                className="text-[36px] leading-[40px]"
+                style={{ color: colors.primary }}
               >
-                <Text
-                  className={`text-sm ${active ? "text-background font-semibold" : "text-foreground"}`}
+                orders.
+              </Display>
+            </Display>
+          </View>
+          <Body className="text-muted text-sm leading-5 mt-2">
+            <BodyBold style={{ color: colors.primary }}>{openCount} open</BodyBold>
+            {" · "}refreshes every 15 seconds.
+          </Body>
+        </Animated.View>
+
+        {/* Filter pills */}
+        <Animated.View entering={FadeInUp.duration(420).delay(80)} className="mt-5 -mx-5">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+          >
+            {FILTERS.map((f) => {
+              const active = filter === f.key;
+              const count =
+                f.key === "all"
+                  ? orders.length
+                  : f.key === "open"
+                    ? openCount
+                    : orders.filter((o) => o.status === f.key).length;
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => setFilter(f.key)}
+                  className="active:opacity-80"
                 >
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <View
+                    className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full"
+                    style={{
+                      backgroundColor: active
+                        ? colors.foreground
+                        : colors["background-elevated"],
+                      borderWidth: 1.5,
+                      borderColor: active ? colors.foreground : colors["border-soft"],
+                    }}
+                  >
+                    <BodyBold
+                      className="text-[12px]"
+                      style={{ color: active ? colors.background : colors.foreground }}
+                    >
+                      {f.label}
+                    </BodyBold>
+                    <MonoBold
+                      className="text-[10px]"
+                      style={{
+                        color: active ? colors.background : colors.muted,
+                        opacity: active ? 0.7 : 1,
+                      }}
+                    >
+                      {count}
+                    </MonoBold>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Animated.View>
       </View>
 
       {ordersQ.isLoading ? (
@@ -92,7 +175,11 @@ export default function ProviderOrdersScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(o) => String(o.id)}
-          contentContainerStyle={{ paddingBottom: 24, paddingTop: 6 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: 32,
+            paddingTop: 18,
+          }}
           ItemSeparatorComponent={() => <View className="h-3" />}
           refreshControl={
             <RefreshControl
@@ -102,15 +189,17 @@ export default function ProviderOrdersScreen() {
             />
           }
           ListEmptyComponent={
-            <EmptyState
-              icon="receipt-outline"
-              title="No orders here"
-              description={
-                filter === "open"
-                  ? "New orders will appear when buyers check out."
-                  : "Try a different filter to find orders."
-              }
-            />
+            <Animated.View entering={FadeInUp.duration(420).delay(60)}>
+              <EmptyState
+                icon="receipt-outline"
+                title="No orders here"
+                description={
+                  filter === "open"
+                    ? "New orders will appear when buyers check out."
+                    : "Try a different filter to find orders."
+                }
+              />
+            </Animated.View>
           }
           renderItem={({ item, index }) => {
             const status = item.status as OrderStatus;
@@ -118,84 +207,132 @@ export default function ProviderOrdersScreen() {
               <Animated.View
                 entering={FadeInDown.springify().damping(18).delay(Math.min(index, 6) * 25)}
                 layout={LinearTransition.springify().damping(18)}
-                className="bg-surface border border-border rounded-2xl p-4 gap-3"
               >
-                <Link href={`/order/${item.id}`} asChild>
-                  <TouchableOpacity className="gap-2 active:opacity-80">
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-foreground font-semibold">Order #{item.id}</Text>
-                      <StatusBadge status={status} />
-                    </View>
-                    <View className="flex-row items-center gap-2">
-                      <Ionicons name="cube-outline" size={14} color={colors.muted} />
-                      <Text className="text-muted text-sm">
-                        {item.items.length} item{item.items.length === 1 ? "" : "s"}
-                      </Text>
-                      <Text className="text-muted text-sm">·</Text>
-                      <Text className="text-foreground font-semibold text-sm">
-                        {formatPrice(item.totalPrice)}
-                      </Text>
-                    </View>
-                    <View className="flex-row items-start gap-2">
-                      <Ionicons
-                        name="location-outline"
-                        size={14}
-                        color={colors.muted}
-                        style={{ marginTop: 2 }}
-                      />
-                      <Text className="text-muted text-sm flex-1" numberOfLines={2}>
-                        {item.deliveryAddress}
-                      </Text>
-                    </View>
-                    {item.notes ? (
-                      <View className="flex-row items-start gap-2">
-                        <Ionicons
-                          name="chatbox-outline"
-                          size={14}
-                          color={colors.muted}
-                          style={{ marginTop: 2 }}
-                        />
-                        <Text className="text-muted text-sm italic flex-1" numberOfLines={2}>
-                          “{item.notes}”
-                        </Text>
-                      </View>
-                    ) : null}
-                  </TouchableOpacity>
-                </Link>
+                <Card raised className="overflow-hidden">
+                  <Link href={`/order/${item.id}`} asChild>
+                    <Pressable className="active:opacity-90">
+                      <View className="px-4 pt-3.5 pb-3">
+                        <View className="flex-row items-center justify-between mb-2">
+                          <View className="flex-row items-center gap-2">
+                            <Mono className="text-muted text-[10px]">
+                              №{String(item.id).padStart(4, "0")}
+                            </Mono>
+                            <View className="w-1 h-1 rounded-full bg-muted-soft" />
+                            <Mono className="text-muted text-[10px]">
+                              {new Date(item.createdAt).toLocaleDateString("fr-TN", {
+                                month: "short",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </Mono>
+                          </View>
+                          <StatusBadge status={status} />
+                        </View>
 
-                <View className="border-t border-border pt-3">
-                  <Text className="text-muted text-[11px] uppercase tracking-wider mb-2">
-                    Update status
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 8 }}
+                        <View className="flex-row items-end justify-between mt-1">
+                          <View className="flex-1 pr-3">
+                            <View className="flex-row items-start gap-1.5 mb-1.5">
+                              <Ionicons
+                                name="location"
+                                size={11}
+                                color={colors.muted}
+                                style={{ marginTop: 2 }}
+                              />
+                              <Body
+                                className="text-muted text-xs leading-4 flex-1"
+                                numberOfLines={2}
+                              >
+                                {item.deliveryAddress}
+                              </Body>
+                            </View>
+                            {item.notes ? (
+                              <View className="flex-row items-start gap-1.5">
+                                <Ionicons
+                                  name="chatbox"
+                                  size={11}
+                                  color={colors["muted-soft"]}
+                                  style={{ marginTop: 2 }}
+                                />
+                                <Body
+                                  className="text-muted text-[11px] italic flex-1 leading-4"
+                                  numberOfLines={1}
+                                >
+                                  “{item.notes}”
+                                </Body>
+                              </View>
+                            ) : null}
+                          </View>
+                          <View className="items-end">
+                            <DisplaySm className="text-foreground text-[20px]">
+                              {formatPrice(item.totalPrice)}
+                            </DisplaySm>
+                            <MonoBold
+                              className="text-muted text-[10px] mt-0.5"
+                              style={{ letterSpacing: 0.8 }}
+                            >
+                              {item.items.length} ITEM{item.items.length === 1 ? "" : "S"}
+                            </MonoBold>
+                          </View>
+                        </View>
+                      </View>
+                    </Pressable>
+                  </Link>
+
+                  {/* Status transition row */}
+                  <View
+                    className="px-4 py-3"
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: colors["border-soft"],
+                      backgroundColor: colors["background-elevated"],
+                    }}
                   >
-                    {STATUSES.map((s) => {
-                      const active = status === s;
-                      const allowed = active || canTransitionOrderStatus(status, s);
-                      return (
-                        <TouchableOpacity
-                          key={s}
-                          className={`px-3 py-1.5 rounded-full border ${
-                            active
-                              ? "bg-primary border-primary"
-                              : "bg-background border-border"
-                          } ${!allowed ? "opacity-40" : ""}`}
-                          disabled={active || updateStatus.isPending || !allowed}
-                          onPress={() => updateStatus.mutate({ id: item.id, status: s })}
-                        >
-                          <Text
-                            className={`text-xs ${active ? "text-background font-semibold" : "text-foreground"}`}
+                    <Label className="mb-2">UPDATE STATUS</Label>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 6 }}
+                    >
+                      {STATUSES.map((s) => {
+                        const active = status === s;
+                        const allowed = active || canTransitionOrderStatus(status, s);
+                        return (
+                          <Pressable
+                            key={s}
+                            disabled={active || updateStatus.isPending || !allowed}
+                            onPress={() => updateStatus.mutate({ id: item.id, status: s })}
+                            className="active:opacity-80"
                           >
-                            {s}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
+                            <View
+                              className="px-2.5 py-1 rounded-full"
+                              style={{
+                                backgroundColor: active
+                                  ? colors.primary
+                                  : colors.surface,
+                                borderWidth: 1,
+                                borderColor: active
+                                  ? colors.primary
+                                  : colors["border-soft"],
+                                opacity: !allowed ? 0.35 : 1,
+                              }}
+                            >
+                              <MonoBold
+                                className="text-[10px]"
+                                style={{
+                                  color: active ? colors.background : colors.foreground,
+                                  letterSpacing: 0.8,
+                                }}
+                              >
+                                {s.toUpperCase()}
+                              </MonoBold>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </Card>
               </Animated.View>
             );
           }}

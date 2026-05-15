@@ -1,19 +1,36 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
-import { Image } from "expo-image";
-
+import { Card, Pill } from "@/components/receipt-card";
 import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge, type OrderStatus } from "@/components/status-badge";
 import { StatusTimeline } from "@/components/status-timeline";
+import {
+  Body,
+  BodyBold,
+  Display,
+  DisplaySm,
+  Label,
+  Mono,
+  MonoBold,
+} from "@/components/typography";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
-import { formatPrice } from "@/lib/utils";
+import { formatPhone, formatPrice } from "@/lib/utils";
 import { canTransitionOrderStatus } from "@/shared/const";
 
 const STATUSES: OrderStatus[] = ["pending", "confirmed", "ready", "delivered", "cancelled"];
@@ -83,17 +100,19 @@ export default function OrderDetailScreen() {
   if (orderQ.isLoading) {
     return (
       <ScreenContainer className="items-center justify-center">
-        <Stack.Screen options={{ title: "Order", headerShown: true }} />
-        <ActivityIndicator />
+        <Stack.Screen options={{ headerShown: false }} />
+        <ActivityIndicator color={colors.primary} />
       </ScreenContainer>
     );
   }
 
   if (!orderQ.data) {
     return (
-      <ScreenContainer className="items-center justify-center">
-        <Stack.Screen options={{ title: "Order", headerShown: true }} />
-        <Text className="text-muted">{orderQ.error?.message ?? "Order not found"}</Text>
+      <ScreenContainer className="items-center justify-center px-6">
+        <Stack.Screen options={{ headerShown: false }} />
+        <Body className="text-muted text-center">
+          {orderQ.error?.message ?? "Order not found"}
+        </Body>
       </ScreenContainer>
     );
   }
@@ -108,145 +127,302 @@ export default function OrderDetailScreen() {
     productById.set(p.id, { name: p.name, imageUrl: p.imageUrl ?? null });
   }
 
+  const party = isProviderOnOrder ? order.buyer : order.provider;
+  const partyKind = isProviderOnOrder ? "BUYER" : "SUPPLIER";
+
   return (
-    <ScreenContainer className="p-6">
-      <Stack.Screen options={{ title: `Order #${order.id}`, headerShown: true }} />
+    <ScreenContainer>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <View className="flex-row items-center justify-between pb-3">
-          <Text className="text-2xl font-bold text-foreground">Order #{order.id}</Text>
-          <StatusBadge status={status} size="md" />
-        </View>
+      <LinearGradient
+        colors={[colors.primary + "1A", colors.background + "00"]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 1, y: 0.7 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 260 }}
+        pointerEvents="none"
+      />
 
-        <View className="bg-surface border border-border rounded-2xl p-4 mb-3">
-          <StatusTimeline status={status} />
-        </View>
-
-        {(() => {
-          const party = isProviderOnOrder ? order.buyer : order.provider;
-          if (!party) return null;
-          const partyLabel = isProviderOnOrder ? "Buyer" : "Supplier";
-          const icon = isProviderOnOrder ? "person-outline" : "storefront-outline";
-          return (
-            <View className="bg-surface border border-border rounded-2xl p-4 gap-1 mb-3">
-              <Text className="text-muted text-sm">{partyLabel}</Text>
-              <View className="flex-row items-center gap-2">
-                <Ionicons name={icon} size={16} color={colors.primary} />
-                <Text className="text-foreground font-medium" numberOfLines={1}>
-                  {party.businessName}
-                </Text>
-              </View>
-              {party.contactPhone ? (
-                <View className="flex-row items-center gap-2 mt-1">
-                  <Ionicons name="call-outline" size={14} color={colors.muted} />
-                  <Text className="text-muted text-sm">{party.contactPhone}</Text>
-                </View>
-              ) : null}
-              {!isProviderOnOrder && order.provider?.location ? (
-                <View className="flex-row items-center gap-2 mt-1">
-                  <Ionicons name="location-outline" size={14} color={colors.muted} />
-                  <Text className="text-muted text-sm">{order.provider.location}</Text>
-                </View>
-              ) : null}
-            </View>
-          );
-        })()}
-
-        <View className="bg-surface border border-border rounded-2xl p-4 gap-2">
-          <Text className="text-muted text-sm">Delivery address</Text>
-          <Text className="text-foreground">{order.deliveryAddress}</Text>
-          {order.notes ? (
-            <>
-              <Text className="text-muted text-sm mt-2">Notes</Text>
-              <Text className="text-foreground italic">“{order.notes}”</Text>
-            </>
-          ) : null}
-        </View>
-
-        <View className="bg-surface border border-border rounded-2xl p-4 mt-3 gap-2">
-          <Text className="text-muted text-sm pb-1">Items</Text>
-          {order.items.map((it, idx) => {
-            const meta = productById.get(it.productId);
-            return (
-              <View key={`${it.productId}-${idx}`} className="flex-row items-center gap-2">
-                {meta?.imageUrl ? (
-                  <Image
-                    source={{ uri: resolveImageUrl(meta.imageUrl) ?? undefined }}
-                    style={{ width: 36, height: 36, borderRadius: 6 }}
-                    contentFit="cover"
-                    transition={150}
-                  />
-                ) : (
-                  <View className="w-9 h-9 rounded-md bg-background border border-border" />
-                )}
-                <Text className="text-foreground flex-1">
-                  {meta?.name ?? `Product #${it.productId}`}
-                  <Text className="text-muted"> × {it.quantity}</Text>
-                </Text>
-                <Text className="text-foreground">${(it.price * it.quantity).toFixed(2)}</Text>
-              </View>
-            );
-          })}
-          <View className="flex-row justify-between pt-2 mt-1 border-t border-border">
-            <Text className="text-foreground font-semibold">Total</Text>
-            <Text className="text-foreground font-semibold">{formatPrice(order.totalPrice)}</Text>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, paddingTop: 8 }}>
+        {/* Header */}
+        <Animated.View entering={FadeInDown.duration(360)}>
+          <View className="flex-row items-center justify-between pt-2">
+            <Pressable
+              onPress={() => router.back()}
+              className="w-10 h-10 rounded-full items-center justify-center bg-surface active:opacity-70"
+              hitSlop={6}
+            >
+              <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+            </Pressable>
+            <StatusBadge status={status} size="md" />
           </View>
-        </View>
 
-        {isProviderOnOrder ? (
-          <View className="bg-surface border border-border rounded-2xl p-4 mt-3 gap-2">
-            <Text className="text-muted text-sm">Update status</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {STATUSES.map((s) => {
-                const active = status === s;
-                const allowed = active || canTransitionOrderStatus(status, s);
-                return (
-                  <TouchableOpacity
-                    key={s}
-                    className={`px-3 py-1.5 rounded-full border ${
-                      active ? "bg-primary border-primary" : "bg-background border-border"
-                    } ${!allowed ? "opacity-40" : ""}`}
-                    disabled={active || updateStatus.isPending || !allowed}
-                    onPress={() => updateStatus.mutate({ id: order.id, status: s })}
-                  >
-                    <Text className={active ? "text-background" : "text-foreground"}>{s}</Text>
-                  </TouchableOpacity>
-                );
+          <View className="mt-5 mb-1">
+            <Mono className="text-muted text-[11px]">
+              №{String(order.id).padStart(4, "0")} ·{" "}
+              {new Date(order.createdAt).toLocaleDateString("fr-TN", {
+                year: "numeric",
+                month: "short",
+                day: "2-digit",
               })}
-            </ScrollView>
+            </Mono>
+            <Display className="text-foreground text-[36px] leading-[40px] mt-1">
+              Order{" "}
+              <Display
+                className="text-[36px] leading-[40px]"
+                style={{ color: colors.primary }}
+              >
+                #{order.id}.
+              </Display>
+            </Display>
           </View>
+        </Animated.View>
+
+        {/* Timeline */}
+        <Animated.View entering={FadeInUp.duration(420).delay(60)} className="mt-6">
+          <Card raised className="px-4 py-4">
+            <Label className="mb-3">PROGRESS</Label>
+            <StatusTimeline status={status} />
+          </Card>
+        </Animated.View>
+
+        {/* Counterparty */}
+        {party ? (
+          <Animated.View entering={FadeInUp.duration(420).delay(120)} className="mt-3">
+            <Card raised className="px-4 py-3.5">
+              <Label className="mb-2">{partyKind}</Label>
+              <View className="flex-row items-center gap-3">
+                <View
+                  className="w-10 h-10 rounded-xl items-center justify-center"
+                  style={{ backgroundColor: colors.primary + "16" }}
+                >
+                  <Ionicons
+                    name={isProviderOnOrder ? "person" : "storefront"}
+                    size={16}
+                    color={colors.primary}
+                  />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <BodyBold className="text-foreground" numberOfLines={1}>
+                    {party.businessName}
+                  </BodyBold>
+                  <View className="flex-row items-center gap-3 mt-1 flex-wrap">
+                    {party.contactPhone ? (
+                      <View className="flex-row items-center gap-1">
+                        <Ionicons name="call" size={11} color={colors.muted} />
+                        <Mono className="text-muted text-[11px]">
+                          {formatPhone(party.contactPhone)}
+                        </Mono>
+                      </View>
+                    ) : null}
+                    {!isProviderOnOrder && order.provider?.location ? (
+                      <View className="flex-row items-center gap-1">
+                        <Ionicons name="location" size={11} color={colors.muted} />
+                        <Body className="text-muted text-[11px]" numberOfLines={1}>
+                          {order.provider.location}
+                        </Body>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
         ) : null}
 
-        {isBuyerOnOrder ? (
-          <View className="mt-4 gap-2">
-            {reorderNote ? (
-              <View className="flex-row items-center gap-2 bg-warning/10 rounded-xl p-3">
-                <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
-                <Text className="text-warning text-sm flex-1">{reorderNote}</Text>
+        {/* Delivery */}
+        <Animated.View entering={FadeInUp.duration(420).delay(180)} className="mt-3">
+          <Card raised className="px-4 py-3.5">
+            <Label className="mb-2">DELIVERY</Label>
+            <View className="flex-row items-start gap-2">
+              <Ionicons
+                name="location"
+                size={14}
+                color={colors.muted}
+                style={{ marginTop: 3 }}
+              />
+              <Body className="text-foreground flex-1 leading-5">{order.deliveryAddress}</Body>
+            </View>
+            {order.notes ? (
+              <View
+                className="mt-3 pt-3 flex-row items-start gap-2"
+                style={{ borderTopWidth: 1, borderTopColor: colors["border-soft"] }}
+              >
+                <Ionicons
+                  name="chatbox"
+                  size={14}
+                  color={colors.muted}
+                  style={{ marginTop: 3 }}
+                />
+                <Body className="text-foreground italic flex-1 leading-5">
+                  “{order.notes}”
+                </Body>
               </View>
             ) : null}
-            <TouchableOpacity
-              className="bg-primary rounded-2xl py-3.5 items-center flex-row justify-center gap-2 active:opacity-80 disabled:opacity-50"
+          </Card>
+        </Animated.View>
+
+        {/* Items + total */}
+        <Animated.View entering={FadeInUp.duration(420).delay(240)} className="mt-3">
+          <Card raised className="overflow-hidden">
+            <View className="px-4 pt-3.5 pb-2 flex-row items-center justify-between">
+              <Label>ITEMS</Label>
+              <Mono className="text-muted text-[10px]">
+                {order.items.length} LINE{order.items.length === 1 ? "" : "S"}
+              </Mono>
+            </View>
+            <View className="px-4 pb-3 gap-2.5">
+              {order.items.map((it, idx) => {
+                const meta = productById.get(it.productId);
+                const line = it.price * it.quantity;
+                return (
+                  <View key={`${it.productId}-${idx}`} className="flex-row items-center gap-3">
+                    {meta?.imageUrl ? (
+                      <Image
+                        source={{ uri: resolveImageUrl(meta.imageUrl) ?? undefined }}
+                        style={{ width: 40, height: 40, borderRadius: 10 }}
+                        contentFit="cover"
+                        transition={150}
+                      />
+                    ) : (
+                      <View
+                        className="w-10 h-10 rounded-xl items-center justify-center"
+                        style={{
+                          backgroundColor: colors.surface,
+                          borderWidth: 1,
+                          borderColor: colors["border-soft"],
+                        }}
+                      >
+                        <Ionicons name="image-outline" size={14} color={colors["muted-soft"]} />
+                      </View>
+                    )}
+                    <View className="flex-1 min-w-0">
+                      <Body className="text-foreground text-[13px]" numberOfLines={1}>
+                        {meta?.name ?? `Product #${it.productId}`}
+                      </Body>
+                      <Mono className="text-muted text-[10px] mt-0.5">
+                        {formatPrice(it.price)} ×{it.quantity}
+                      </Mono>
+                    </View>
+                    <MonoBold className="text-foreground text-[12px]">
+                      {formatPrice(line)}
+                    </MonoBold>
+                  </View>
+                );
+              })}
+            </View>
+            <View
+              className="px-4 py-3 flex-row items-center justify-between"
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: colors["border-soft"],
+                backgroundColor: colors["background-elevated"],
+              }}
+            >
+              <Label>TOTAL</Label>
+              <DisplaySm
+                className="text-[22px]"
+                style={{ color: colors.primary }}
+              >
+                {formatPrice(order.totalPrice)}
+              </DisplaySm>
+            </View>
+          </Card>
+        </Animated.View>
+
+        {/* Provider-only: status update */}
+        {isProviderOnOrder ? (
+          <Animated.View entering={FadeInUp.duration(420).delay(300)} className="mt-3">
+            <Card raised className="px-4 py-3.5">
+              <Label className="mb-2.5">UPDATE STATUS</Label>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 6 }}
+              >
+                {STATUSES.map((s) => {
+                  const active = status === s;
+                  const allowed = active || canTransitionOrderStatus(status, s);
+                  return (
+                    <Pressable
+                      key={s}
+                      disabled={active || updateStatus.isPending || !allowed}
+                      onPress={() => updateStatus.mutate({ id: order.id, status: s })}
+                      className="active:opacity-80"
+                    >
+                      <View
+                        className="px-3 py-1.5 rounded-full"
+                        style={{
+                          backgroundColor: active ? colors.primary : colors["background-elevated"],
+                          borderWidth: 1.5,
+                          borderColor: active ? colors.primary : colors["border-soft"],
+                          opacity: !allowed ? 0.35 : 1,
+                        }}
+                      >
+                        <MonoBold
+                          className="text-[10px]"
+                          style={{
+                            color: active ? colors.background : colors.foreground,
+                            letterSpacing: 0.8,
+                          }}
+                        >
+                          {s.toUpperCase()}
+                        </MonoBold>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Card>
+          </Animated.View>
+        ) : null}
+
+        {/* Buyer-only: reorder + cancel */}
+        {isBuyerOnOrder ? (
+          <Animated.View entering={FadeInUp.duration(420).delay(300)} className="mt-3 gap-3">
+            {reorderNote ? (
+              <View
+                className="flex-row items-center gap-2 rounded-2xl px-3.5 py-2.5"
+                style={{ backgroundColor: colors.primary + "12" }}
+              >
+                <Ionicons name="information-circle" size={16} color={colors.primary} />
+                <Body className="text-sm flex-1" style={{ color: colors["primary-deep"] }}>
+                  {reorderNote}
+                </Body>
+              </View>
+            ) : null}
+
+            <Pressable
               disabled={reorder.isPending}
               onPress={() => {
                 setReorderNote(null);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 reorder.mutate({ id: order.id });
               }}
+              className="active:opacity-90"
+              style={{ opacity: reorder.isPending ? 0.5 : 1 }}
             >
-              {reorder.isPending ? (
-                <ActivityIndicator color={colors.background} />
-              ) : (
-                <>
-                  <Ionicons name="repeat-outline" size={18} color={colors.background} />
-                  <Text className="text-background font-semibold">Reorder these items</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <View
+                className="rounded-2xl py-3.5 items-center flex-row justify-center gap-2"
+                style={{ backgroundColor: colors.primary }}
+              >
+                {reorder.isPending ? (
+                  <ActivityIndicator color={colors.background} />
+                ) : (
+                  <>
+                    <Ionicons name="repeat" size={16} color={colors.background} />
+                    <MonoBold
+                      className="text-[12px]"
+                      style={{ color: colors.background, letterSpacing: 1.2 }}
+                    >
+                      REORDER THESE ITEMS
+                    </MonoBold>
+                  </>
+                )}
+              </View>
+            </Pressable>
 
             {status === "pending" ? (
-              <TouchableOpacity
-                className="bg-error/10 rounded-2xl py-3.5 items-center flex-row justify-center gap-2 active:opacity-80 disabled:opacity-50"
+              <Pressable
                 disabled={cancelByBuyer.isPending}
                 onPress={() =>
                   Alert.alert(
@@ -265,18 +441,33 @@ export default function OrderDetailScreen() {
                     ],
                   )
                 }
+                className="active:opacity-80"
               >
-                {cancelByBuyer.isPending ? (
-                  <ActivityIndicator color={colors.error} />
-                ) : (
-                  <>
-                    <Ionicons name="close-circle-outline" size={18} color={colors.error} />
-                    <Text className="text-error font-semibold">Cancel order</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                <View
+                  className="rounded-2xl py-3.5 items-center flex-row justify-center gap-2"
+                  style={{
+                    backgroundColor: "transparent",
+                    borderWidth: 1.5,
+                    borderColor: colors.error + "60",
+                  }}
+                >
+                  {cancelByBuyer.isPending ? (
+                    <ActivityIndicator color={colors.error} />
+                  ) : (
+                    <>
+                      <Ionicons name="close-circle" size={16} color={colors.error} />
+                      <MonoBold
+                        className="text-[12px]"
+                        style={{ color: colors.error, letterSpacing: 1.2 }}
+                      >
+                        CANCEL ORDER
+                      </MonoBold>
+                    </>
+                  )}
+                </View>
+              </Pressable>
             ) : null}
-          </View>
+          </Animated.View>
         ) : null}
       </ScrollView>
     </ScreenContainer>

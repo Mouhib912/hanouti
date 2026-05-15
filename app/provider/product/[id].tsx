@@ -1,18 +1,27 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   Switch,
-  Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
+import { Card, Pill } from "@/components/receipt-card";
 import { ProductImagePicker } from "@/components/product-image-picker";
 import { ScreenContainer } from "@/components/screen-container";
+import {
+  Body,
+  BodyBold,
+  Display,
+  Label,
+  MonoBold,
+} from "@/components/typography";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 
@@ -56,7 +65,7 @@ export default function ProviderProductEditScreen() {
   if (productQ.isLoading || categoriesQ.isLoading) {
     return (
       <ScreenContainer className="items-center justify-center">
-        <Stack.Screen options={{ title: "Edit product", headerShown: true }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator color={colors.primary} />
       </ScreenContainer>
     );
@@ -65,9 +74,9 @@ export default function ProviderProductEditScreen() {
   if (!productQ.data) {
     return (
       <ScreenContainer className="items-center justify-center px-6">
-        <Stack.Screen options={{ title: "Edit product", headerShown: true }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <Ionicons name="alert-circle-outline" size={32} color={colors.muted} />
-        <Text className="text-muted mt-2">Product not found</Text>
+        <Body className="text-muted mt-2">Product not found</Body>
       </ScreenContainer>
     );
   }
@@ -80,102 +89,149 @@ export default function ProviderProductEditScreen() {
     categoryId !== null;
 
   return (
-    <ScreenContainer className="px-5">
-      <Stack.Screen options={{ title: "Edit product", headerShown: true }} />
+    <ScreenContainer>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <LinearGradient
+        colors={[colors.primary + "1A", colors.background + "00"]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 1, y: 0.7 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
+        pointerEvents="none"
+      />
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 32, paddingTop: 12 }}
+        contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: 20, paddingTop: 8 }}
       >
-        <View className="gap-4">
-          <ProductImagePicker value={imageUrl} onChange={setImageUrl} />
+        <Animated.View entering={FadeInDown.duration(360)}>
+          <View className="flex-row items-center justify-between pt-2">
+            <Pressable
+              onPress={() => router.back()}
+              className="w-10 h-10 rounded-full items-center justify-center bg-surface active:opacity-70"
+              hitSlop={6}
+            >
+              <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+            </Pressable>
+            <Pill intent="ghost">
+              <Ionicons name="create" size={11} color={colors.primary} />
+              <Label className="text-foreground">EDIT</Label>
+            </Pill>
+          </View>
 
-          <View>
-            <Text className="text-muted text-xs mb-1.5">Category</Text>
+          <View className="mt-5 mb-5">
+            <Display className="text-foreground text-[30px] leading-[34px]" numberOfLines={2}>
+              {productQ.data.name}
+            </Display>
+            <Body className="text-muted text-sm leading-5 mt-2">
+              Update price, stock, photo, or move it to a different category.
+            </Body>
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInUp.duration(420).delay(60)} className="gap-4">
+          <Card raised className="px-4 py-4">
+            <Label className="mb-2">PRODUCT PHOTO</Label>
+            <ProductImagePicker value={imageUrl} onChange={setImageUrl} />
+          </Card>
+
+          <Card raised className="px-4 py-4">
+            <Label className="mb-2">CATEGORY</Label>
             <View className="flex-row flex-wrap gap-2">
               {categories.map((c) => {
                 const active = categoryId === c.id;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={c.id}
-                    className={`px-3 py-1.5 rounded-full border ${
-                      active ? "bg-primary border-primary" : "bg-surface border-border"
-                    }`}
                     onPress={() => setCategoryId(c.id)}
+                    className="active:opacity-80"
                   >
-                    <Text
-                      className={`text-sm ${active ? "text-background font-medium" : "text-foreground"}`}
+                    <View
+                      className="px-3 py-1.5 rounded-full"
+                      style={{
+                        backgroundColor: active
+                          ? colors.foreground
+                          : colors["background-elevated"],
+                        borderWidth: 1.5,
+                        borderColor: active ? colors.foreground : colors["border-soft"],
+                      }}
                     >
-                      {c.name}
-                    </Text>
-                  </TouchableOpacity>
+                      <BodyBold
+                        className="text-[12px]"
+                        style={{ color: active ? colors.background : colors.foreground }}
+                      >
+                        {c.name}
+                      </BodyBold>
+                    </View>
+                  </Pressable>
                 );
               })}
             </View>
-          </View>
+          </Card>
 
-          <View>
-            <Text className="text-muted text-xs mb-1.5">Name</Text>
-            <TextInput
-              className="border border-border rounded-xl px-4 py-3 text-foreground bg-surface"
-              placeholder="Product name"
-              placeholderTextColor={colors["muted-soft"]}
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="words"
-            />
-          </View>
+          <FormText
+            icon="cube-outline"
+            label="NAME"
+            placeholder="Product name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
 
-          <View className="flex-row gap-2">
+          <View className="flex-row gap-3">
             <View className="flex-1">
-              <Text className="text-muted text-xs mb-1.5">Price</Text>
-              <View className="flex-row items-center bg-surface border border-border rounded-xl px-3">
-                <Text className="text-muted">$</Text>
-                <TextInput
-                  className="flex-1 py-3 pl-1 text-foreground"
-                  placeholder="0.00"
-                  placeholderTextColor={colors["muted-soft"]}
-                  keyboardType="decimal-pad"
-                  value={price}
-                  onChangeText={setPrice}
-                />
-              </View>
+              <FormText
+                icon="cash-outline"
+                label="PRICE (DT)"
+                placeholder="0,00"
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="decimal-pad"
+              />
             </View>
             <View className="flex-1">
-              <Text className="text-muted text-xs mb-1.5">Quantity</Text>
-              <TextInput
-                className="border border-border rounded-xl px-4 py-3 text-foreground bg-surface"
+              <FormText
+                icon="layers-outline"
+                label="QUANTITY"
                 placeholder="0"
-                placeholderTextColor={colors["muted-soft"]}
-                keyboardType="number-pad"
                 value={quantity}
                 onChangeText={setQuantity}
+                keyboardType="number-pad"
               />
             </View>
           </View>
 
-          <View className="flex-row items-center justify-between bg-surface border border-border rounded-xl px-4 py-3">
-            <View className="flex-1">
-              <Text className="text-foreground font-medium">Available to buyers</Text>
-              <Text className="text-muted text-xs">{inStock ? "In stock" : "Out of stock"}</Text>
+          <Card raised className="px-4 py-3.5 flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <Label>VISIBILITY</Label>
+              <BodyBold className="text-foreground text-[14px] mt-1">
+                {inStock ? "Available to buyers" : "Hidden from buyers"}
+              </BodyBold>
+              <Body className="text-muted text-xs mt-0.5">
+                Toggle this when the item runs out so customers see accurate availability.
+              </Body>
             </View>
             <Switch
               value={inStock}
               onValueChange={setInStock}
-              thumbColor={inStock ? colors.background : undefined}
-              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={inStock ? colors.background : colors["muted-soft"]}
+              trackColor={{ false: colors["border-soft"], true: colors.primary }}
             />
-          </View>
+          </Card>
 
           {error ? (
-            <View className="flex-row items-center gap-2 bg-error/10 rounded-xl p-3">
+            <View
+              className="flex-row items-center gap-2 rounded-2xl px-3.5 py-2.5"
+              style={{ backgroundColor: colors.error + "14" }}
+            >
               <Ionicons name="alert-circle" size={16} color={colors.error} />
-              <Text className="text-error text-sm flex-1">{error}</Text>
+              <Body className="text-sm flex-1" style={{ color: colors.error }}>
+                {error}
+              </Body>
             </View>
           ) : null}
 
-          <TouchableOpacity
-            className="bg-primary rounded-2xl py-4 items-center active:opacity-80 disabled:opacity-50 mt-2"
+          <Pressable
             disabled={!canSave || update.isPending}
             onPress={() =>
               update.mutate({
@@ -185,18 +241,68 @@ export default function ProviderProductEditScreen() {
                 quantity: parseInt(quantity.trim(), 10),
                 categoryId: categoryId!,
                 inStock,
-                imageUrl: imageUrl,
+                imageUrl,
               })
             }
+            className="active:opacity-90 mt-2"
+            style={{ opacity: !canSave || update.isPending ? 0.5 : 1 }}
           >
-            {update.isPending ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <Text className="text-background font-semibold">Save changes</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            <View
+              className="rounded-2xl py-4 items-center flex-row justify-center gap-2"
+              style={{ backgroundColor: colors.primary }}
+            >
+              {update.isPending ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
+                <>
+                  <Ionicons name="checkmark" size={18} color={colors.background} />
+                  <MonoBold
+                    className="text-[12px]"
+                    style={{ color: colors.background, letterSpacing: 1.2 }}
+                  >
+                    SAVE CHANGES
+                  </MonoBold>
+                </>
+              )}
+            </View>
+          </Pressable>
+        </Animated.View>
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+function FormText({
+  icon,
+  label,
+  ...rest
+}: React.ComponentProps<typeof TextInput> & {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+}) {
+  const colors = useColors();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View>
+      <Label className="mb-2">{label}</Label>
+      <View
+        className="flex-row items-center rounded-2xl px-3.5"
+        style={{
+          backgroundColor: colors["background-elevated"],
+          borderWidth: 1.5,
+          borderColor: focused ? colors.primary : colors["border-soft"],
+        }}
+      >
+        <Ionicons name={icon} size={16} color={focused ? colors.primary : colors.muted} />
+        <TextInput
+          className="flex-1 py-3 pl-2 font-body"
+          style={{ color: colors.foreground }}
+          placeholderTextColor={colors["muted-soft"]}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          {...rest}
+        />
+      </View>
+    </View>
   );
 }
