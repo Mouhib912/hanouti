@@ -43,7 +43,12 @@ services:
     environment:
       NODE_ENV: development
       EXPO_PORT: "8081"
-      EXPO_PUBLIC_API_BASE_URL: http://localhost:3000
+      # Use LAN_IP from .env when set so the bundle calls the host machine,
+      # not "localhost" (which on a phone refers to the phone itself).
+      EXPO_PUBLIC_API_BASE_URL: http://${LAN_IP:-localhost}:3000
+      # Tells the Expo dev server which IP to advertise to clients (phones in
+      # Expo Go). Empty fallback lets Expo auto-detect when LAN_IP is unset.
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${LAN_IP:-}
       EXPO_NO_TELEMETRY: "1"
       BROWSER: none
       CI: "true"

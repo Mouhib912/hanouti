@@ -1,9 +1,9 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform, View } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Platform } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 
 export default function TabLayout() {
@@ -15,16 +15,20 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.tint,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors["muted-soft"],
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarShowLabel: false,
         tabBarStyle: {
-          paddingTop: 8,
+          paddingTop: 10,
           paddingBottom: bottomPadding,
           height: tabBarHeight,
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-          borderTopWidth: 0.5,
+          backgroundColor: colors["background-elevated"],
+          borderTopColor: colors["border-soft"],
+          borderTopWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
         },
       }}
     >
@@ -32,7 +36,20 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <View className="items-center justify-center">
+              <IconSymbol size={26} name="house.fill" color={color} />
+              <View
+                style={{
+                  marginTop: 6,
+                  width: 18,
+                  height: 2,
+                  borderRadius: 1,
+                  backgroundColor: focused ? colors.primary : "transparent",
+                }}
+              />
+            </View>
+          ),
         }}
       />
     </Tabs>

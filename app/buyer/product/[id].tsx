@@ -1,17 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
-  Text,
-  TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
+import { Card, Pill } from "@/components/receipt-card";
 import { ScreenContainer } from "@/components/screen-container";
+import { Body, BodyBold, Display, DisplaySm, Label, Mono, MonoBold } from "@/components/typography";
 import { useColors } from "@/hooks/use-colors";
 import { resolveImageUrl } from "@/lib/_core/api";
 import { trpc } from "@/lib/trpc";
@@ -37,6 +40,7 @@ export default function BuyerProductDetailScreen() {
     onSuccess: () => {
       utils.cart.detailed.invalidate();
       utils.cart.list.invalidate();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push("/buyer/cart");
     },
     onError: (err) => setError(err.message),
@@ -45,7 +49,7 @@ export default function BuyerProductDetailScreen() {
   if (productQ.isLoading) {
     return (
       <ScreenContainer className="items-center justify-center">
-        <Stack.Screen options={{ title: "Product", headerShown: true }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator color={colors.primary} />
       </ScreenContainer>
     );
@@ -55,95 +59,143 @@ export default function BuyerProductDetailScreen() {
   if (!product) {
     return (
       <ScreenContainer className="items-center justify-center px-6">
-        <Stack.Screen options={{ title: "Product", headerShown: true }} />
+        <Stack.Screen options={{ headerShown: false }} />
         <Ionicons name="alert-circle-outline" size={32} color={colors.muted} />
-        <Text className="text-muted mt-2">Product not found.</Text>
+        <Body className="text-muted mt-2">Product not found.</Body>
       </ScreenContainer>
     );
   }
 
   const unitPrice = Number(product.price);
   const lineTotal = unitPrice * qty;
+  const inStock = product.inStock;
 
   return (
     <ScreenContainer>
-      <Stack.Screen options={{ title: product.name, headerShown: true }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        <View className="px-5 pt-4">
-          <View className="aspect-square bg-surface border border-border rounded-3xl overflow-hidden items-center justify-center">
-            {product.imageUrl ? (
-              <Image
-                source={{ uri: resolveImageUrl(product.imageUrl) ?? undefined }}
-                style={{ width: "100%", height: "100%" }}
-                contentFit="cover"
-                transition={200}
-              />
-            ) : (
-              <Ionicons name="image-outline" size={64} color={colors["muted-soft"]} />
-            )}
+      <ScrollView contentContainerStyle={{ paddingBottom: 140 }}>
+        {/* Hero image */}
+        <Animated.View entering={FadeInDown.duration(420)}>
+          <View className="px-5 pt-3">
+            <View className="flex-row items-center justify-between mb-3">
+              <Pressable
+                onPress={() => router.back()}
+                className="w-10 h-10 rounded-full items-center justify-center bg-surface active:opacity-70"
+                hitSlop={6}
+              >
+                <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+              </Pressable>
+              <Pill intent="ghost">
+                <View
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: inStock ? colors.primary : colors["muted-soft"] }}
+                />
+                <Label className="text-foreground">{inStock ? "IN STOCK" : "OUT OF STOCK"}</Label>
+              </Pill>
+            </View>
+
+            <View
+              className="aspect-square rounded-3xl overflow-hidden items-center justify-center"
+              style={{
+                backgroundColor: colors["background-elevated"],
+                borderWidth: 1,
+                borderColor: colors["border-soft"],
+              }}
+            >
+              {product.imageUrl ? (
+                <Image
+                  source={{ uri: resolveImageUrl(product.imageUrl) ?? undefined }}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <View className="items-center gap-2">
+                  <Ionicons name="image-outline" size={48} color={colors["muted-soft"]} />
+                  <Mono className="text-muted text-[10px]" style={{ letterSpacing: 1.2 }}>
+                    NO IMAGE
+                  </Mono>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        </Animated.View>
 
-        <View className="px-5 pt-5 gap-2">
-          <View className="flex-row items-start gap-3">
-            <View className="flex-1">
-              <Text className="text-foreground text-2xl font-bold">{product.name}</Text>
-              <Text className="text-primary text-2xl font-bold mt-1">{formatPrice(product.price)}</Text>
+        {/* Name + price */}
+        <Animated.View entering={FadeInUp.duration(420).delay(80)}>
+          <View className="px-5 pt-6">
+            <Display className="text-foreground text-[28px] leading-8" numberOfLines={3}>
+              {product.name}
+            </Display>
+            <View className="flex-row items-baseline gap-3 mt-3">
+              <DisplaySm
+                style={{ color: colors.primary, fontSize: 30 }}
+              >
+                {formatPrice(product.price)}
+              </DisplaySm>
+              <Mono className="text-muted text-[11px]">per unit</Mono>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Supplier link */}
+        {providerQ.data ? (
+          <Animated.View entering={FadeInUp.duration(420).delay(160)} className="px-5 mt-5">
+            <Pressable
+              onPress={() => router.push(`/buyer/provider/${providerQ.data?.id}`)}
+              className="active:opacity-85"
+            >
+              <Card raised className="px-3.5 py-3 flex-row items-center gap-3">
+                <View
+                  className="w-10 h-10 rounded-xl items-center justify-center"
+                  style={{ backgroundColor: colors.primary + "16" }}
+                >
+                  <Ionicons name="storefront" size={16} color={colors.primary} />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Label>SOLD BY</Label>
+                  <BodyBold className="text-foreground mt-0.5" numberOfLines={1}>
+                    {providerQ.data.businessName}
+                  </BodyBold>
+                  {providerQ.data.location ? (
+                    <Body className="text-muted text-xs mt-0.5" numberOfLines={1}>
+                      {providerQ.data.location}
+                    </Body>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors["muted-soft"]} />
+              </Card>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
+        {/* Description */}
+        {product.description ? (
+          <Animated.View entering={FadeInUp.duration(420).delay(220)} className="px-5 mt-3">
+            <Card raised className="px-4 py-4">
+              <Label className="mb-2">ABOUT</Label>
+              <Body className="text-foreground leading-6">{product.description}</Body>
+            </Card>
+          </Animated.View>
+        ) : null}
+
+        {/* Quantity */}
+        <Animated.View entering={FadeInUp.duration(420).delay(280)} className="px-5 mt-3">
+          <Card raised className="px-4 py-3.5 flex-row items-center justify-between">
+            <View>
+              <Label>QUANTITY</Label>
+              <Body className="text-muted text-xs mt-0.5">Adjust before adding</Body>
             </View>
             <View
-              className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${
-                product.inStock ? "bg-success/15" : "bg-error/15"
-              }`}
+              className="flex-row items-center rounded-full overflow-hidden"
+              style={{
+                backgroundColor: colors["background-elevated"],
+                borderWidth: 1.5,
+                borderColor: colors["border-soft"],
+              }}
             >
-              <View
-                className={`w-1.5 h-1.5 rounded-full ${
-                  product.inStock ? "bg-success" : "bg-error"
-                }`}
-              />
-              <Text
-                className={`text-xs font-medium ${
-                  product.inStock ? "text-success" : "text-error"
-                }`}
-              >
-                {product.inStock ? "In stock" : "Out of stock"}
-              </Text>
-            </View>
-          </View>
-
-          {providerQ.data ? (
-            <TouchableOpacity
-              onPress={() => router.push(`/buyer/provider/${providerQ.data?.id}`)}
-              className="flex-row items-center gap-2 bg-surface border border-border rounded-2xl px-3.5 py-3 active:opacity-80"
-            >
-              <View className="w-8 h-8 rounded-full bg-primary/15 items-center justify-center">
-                <Ionicons name="storefront-outline" size={16} color={colors.primary} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-foreground font-medium" numberOfLines={1}>
-                  {providerQ.data.businessName}
-                </Text>
-                {providerQ.data.location ? (
-                  <Text className="text-muted text-xs" numberOfLines={1}>
-                    {providerQ.data.location}
-                  </Text>
-                ) : null}
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors["muted-soft"]} />
-            </TouchableOpacity>
-          ) : null}
-
-          {product.description ? (
-            <View className="bg-surface border border-border rounded-2xl p-4 mt-1">
-              <Text className="text-muted text-xs uppercase tracking-wider mb-1.5">About</Text>
-              <Text className="text-foreground leading-relaxed">{product.description}</Text>
-            </View>
-          ) : null}
-
-          <View className="bg-surface border border-border rounded-2xl p-4 mt-1 flex-row items-center justify-between">
-            <Text className="text-foreground font-medium">Quantity</Text>
-            <View className="flex-row items-center bg-background border border-border rounded-full">
-              <TouchableOpacity
+              <Pressable
                 className="w-10 h-10 items-center justify-center active:opacity-60"
                 onPress={() => setQty((q) => Math.max(1, q - 1))}
                 disabled={qty <= 1}
@@ -154,50 +206,88 @@ export default function BuyerProductDetailScreen() {
                   size={18}
                   color={qty <= 1 ? colors["muted-soft"] : colors.foreground}
                 />
-              </TouchableOpacity>
-              <Text className="w-10 text-center text-foreground font-bold text-base">{qty}</Text>
-              <TouchableOpacity
+              </Pressable>
+              <View className="w-10 items-center">
+                <DisplaySm className="text-foreground text-[18px]">{qty}</DisplaySm>
+              </View>
+              <Pressable
                 className="w-10 h-10 items-center justify-center active:opacity-60"
                 onPress={() => setQty((q) => q + 1)}
                 hitSlop={4}
               >
                 <Ionicons name="add" size={18} color={colors.foreground} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
-          </View>
+          </Card>
+        </Animated.View>
 
-          {error ? (
-            <View className="flex-row items-center gap-2 bg-error/10 rounded-xl p-3 mt-1">
+        {error ? (
+          <Animated.View entering={FadeInDown.duration(300)} className="px-5 mt-3">
+            <View
+              className="flex-row items-center gap-2 rounded-2xl px-3.5 py-2.5"
+              style={{ backgroundColor: colors.error + "14" }}
+            >
               <Ionicons name="alert-circle" size={16} color={colors.error} />
-              <Text className="text-error text-sm flex-1">{error}</Text>
+              <Body className="text-sm flex-1" style={{ color: colors.error }}>
+                {error}
+              </Body>
             </View>
-          ) : null}
-        </View>
+          </Animated.View>
+        ) : null}
       </ScrollView>
 
-      <View className="absolute left-5 right-5 bottom-5 bg-background-elevated border border-border rounded-3xl px-4 py-3 flex-row items-center gap-3">
-        <View>
-          <Text className="text-muted text-[11px] uppercase tracking-wider">Total</Text>
-          <Text className="text-foreground text-xl font-bold">{formatPrice(lineTotal)}</Text>
-        </View>
-        <TouchableOpacity
-          className="flex-1 bg-primary rounded-2xl py-3.5 items-center flex-row justify-center gap-2 active:opacity-80 disabled:opacity-40"
-          disabled={!product.inStock || addToCart.isPending}
-          onPress={() => {
-            setError(null);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            addToCart.mutate({ productId: product.id, quantity: qty });
+      {/* Sticky add-to-cart bar */}
+      <View
+        className="absolute left-4 right-4"
+        style={{ bottom: 16 }}
+      >
+        <LinearGradient
+          colors={[colors.background + "00", colors.background]}
+          locations={[0, 0.4]}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -28,
+            left: 0,
+            right: 0,
+            height: 28,
           }}
-        >
-          {addToCart.isPending ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <>
-              <Ionicons name="cart-outline" size={18} color={colors.background} />
-              <Text className="text-background font-semibold">Add to cart</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        />
+        <Card raised className="px-3 py-3 flex-row items-center gap-3">
+          <View className="pl-1">
+            <Label>TOTAL</Label>
+            <DisplaySm className="text-foreground text-[20px]">{formatPrice(lineTotal)}</DisplaySm>
+          </View>
+          <Pressable
+            disabled={!inStock || addToCart.isPending}
+            onPress={() => {
+              setError(null);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              addToCart.mutate({ productId: product.id, quantity: qty });
+            }}
+            className="flex-1 active:opacity-90"
+            style={{ opacity: !inStock || addToCart.isPending ? 0.4 : 1 }}
+          >
+            <View
+              className="rounded-2xl px-4 py-3.5 flex-row items-center justify-center gap-2"
+              style={{ backgroundColor: colors.primary }}
+            >
+              {addToCart.isPending ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
+                <>
+                  <Ionicons name="cart" size={18} color={colors.background} />
+                  <MonoBold
+                    className="text-[12px]"
+                    style={{ color: colors.background, letterSpacing: 1.2 }}
+                  >
+                    ADD TO CART
+                  </MonoBold>
+                </>
+              )}
+            </View>
+          </Pressable>
+        </Card>
       </View>
     </ScreenContainer>
   );

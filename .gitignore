@@ -74,3 +74,6 @@ Thumbs.db
 
 # pnpm in-project store
 .pnpm-store/
+
+# Generated QR for Expo Go (LAN-IP specific, regenerated per session)
+expo-qr-code.png

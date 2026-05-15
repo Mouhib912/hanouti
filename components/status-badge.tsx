@@ -1,24 +1,65 @@
-import { Text, View } from "react-native";
+import { View, type ViewStyle } from "react-native";
+
+import { MonoBold } from "@/components/typography";
+import { useColors } from "@/hooks/use-colors";
 
 export type OrderStatus = "pending" | "confirmed" | "ready" | "delivered" | "cancelled";
 
-const STATUS_STYLES: Record<OrderStatus, { bg: string; text: string; label: string }> = {
-  pending: { bg: "bg-warning/15", text: "text-warning", label: "Pending" },
-  confirmed: { bg: "bg-primary/15", text: "text-primary", label: "Confirmed" },
-  ready: { bg: "bg-accent/15", text: "text-accent", label: "Ready" },
-  delivered: { bg: "bg-success/15", text: "text-success", label: "Delivered" },
-  cancelled: { bg: "bg-muted/15", text: "text-muted", label: "Cancelled" },
+const STATUS_LABEL: Record<OrderStatus, string> = {
+  pending: "PENDING",
+  confirmed: "CONFIRMED",
+  ready: "READY",
+  delivered: "DELIVERED",
+  cancelled: "CANCELLED",
 };
 
 export function StatusBadge({ status, size = "sm" }: { status: OrderStatus; size?: "sm" | "md" }) {
-  const style = STATUS_STYLES[status] ?? STATUS_STYLES.pending;
-  const dim = size === "md" ? "px-3 py-1.5" : "px-2.5 py-1";
-  const textSize = size === "md" ? "text-sm" : "text-xs";
+  const colors = useColors();
+
+  // Tonal scale within the white+green system, ordered by progression:
+  //   pending  — outlined neutral (waiting)
+  //   confirmed — light primary tint (motion)
+  //   ready    — filled primary (active, ready for pickup)
+  //   delivered — filled ink (finalised)
+  //   cancelled — outlined muted (closed)
+  const tone: { bg: string; fg: string; border?: string } = (() => {
+    switch (status) {
+      case "pending":
+        return { bg: "transparent", fg: colors.muted, border: colors["border-soft"] };
+      case "confirmed":
+        return { bg: colors.primary + "1F", fg: colors["primary-deep"] };
+      case "ready":
+        return { bg: colors.primary, fg: colors.background };
+      case "delivered":
+        return { bg: colors.foreground, fg: colors.background };
+      case "cancelled":
+        return { bg: "transparent", fg: colors["muted-soft"], border: colors["border-soft"] };
+    }
+  })();
+
+  const padding: ViewStyle =
+    size === "md"
+      ? { paddingHorizontal: 12, paddingVertical: 6 }
+      : { paddingHorizontal: 10, paddingVertical: 4 };
 
   return (
-    <View className={`flex-row items-center gap-1.5 rounded-full ${dim} ${style.bg}`}>
-      <View className={`w-1.5 h-1.5 rounded-full ${style.text.replace("text-", "bg-")}`} />
-      <Text className={`${textSize} font-medium ${style.text}`}>{style.label}</Text>
+    <View
+      style={[
+        {
+          backgroundColor: tone.bg,
+          borderRadius: 999,
+          borderWidth: tone.border ? 1 : 0,
+          borderColor: tone.border,
+          alignSelf: "flex-start",
+        },
+        padding,
+      ]}
+    >
+      <MonoBold
+        style={{ color: tone.fg, fontSize: size === "md" ? 11 : 9, letterSpacing: 1.2 }}
+      >
+        {STATUS_LABEL[status]}
+      </MonoBold>
     </View>
   );
 }
