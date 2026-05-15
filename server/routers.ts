@@ -52,6 +52,7 @@ export const appRouter = router({
           businessName: z.string().optional(),
           location: z.string().optional(),
           contactPhone: z.string().optional(),
+          avatarUrl: z.string().nullable().optional(),
         })
       )
       .mutation(({ ctx, input }) => db.updateUserProfile(ctx.user.id, input)),
