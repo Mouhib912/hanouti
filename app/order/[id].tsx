@@ -3,12 +3,13 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
@@ -376,9 +377,12 @@ export default function OrderDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Buyer-only: reorder + cancel */}
+        {/* Buyer-only: review (delivered orders) + reorder + cancel */}
         {isBuyerOnOrder ? (
           <Animated.View entering={FadeInUp.duration(420).delay(300)} className="mt-3 gap-3">
+            {status === "delivered" ? (
+              <ReviewSection orderId={order.id} providerId={order.providerId} />
+            ) : null}
             {reorderNote ? (
               <View
                 className="flex-row items-center gap-2 rounded-2xl px-3.5 py-2.5"
@@ -471,5 +475,243 @@ export default function OrderDetailScreen() {
         ) : null}
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+/**
+ * ReviewSection — shown on delivered orders for the buyer.
+ * If no review exists: opens to a star picker + comment input.
+ * If a review exists: shows the stars + comment with an Edit affordance.
+ */
+function ReviewSection({ orderId, providerId }: { orderId: number; providerId: number }) {
+  const colors = useColors();
+  const utils = trpc.useUtils();
+  const reviewQ = trpc.reviews.forOrder.useQuery({ orderId });
+  const upsert = trpc.reviews.upsert.useMutation({
+    onSuccess: async () => {
+      await utils.reviews.forOrder.invalidate({ orderId });
+      await utils.reviews.byProvider.invalidate({ providerId });
+      await utils.providers.list.invalidate();
+      await utils.providers.get.invalidate({ id: providerId });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEditing(false);
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const existing = reviewQ.data ?? null;
+  const [editing, setEditing] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (existing) {
+      setRating(existing.rating);
+      setComment(existing.comment ?? "");
+    } else {
+      setRating(0);
+      setComment("");
+    }
+  }, [existing]);
+
+  const isEmpty = !existing && !editing;
+  const isExpanded = editing || !existing;
+
+  if (reviewQ.isLoading) {
+    return (
+      <Card raised className="px-4 py-4 items-center">
+        <ActivityIndicator color={colors.primary} />
+      </Card>
+    );
+  }
+
+  // Already submitted, read-only view with edit affordance.
+  if (existing && !editing) {
+    return (
+      <Card raised className="px-4 py-4">
+        <View className="flex-row items-center justify-between mb-2">
+          <Label>YOUR REVIEW</Label>
+          <Pressable onPress={() => setEditing(true)} hitSlop={6} className="active:opacity-60">
+            <MonoBold
+              className="text-[11px]"
+              style={{ color: colors.primary, letterSpacing: 1.2 }}
+            >
+              EDIT
+            </MonoBold>
+          </Pressable>
+        </View>
+        <StarRow rating={existing.rating} />
+        {existing.comment ? (
+          <Body className="text-foreground text-sm mt-3 leading-5 italic">
+            “{existing.comment}”
+          </Body>
+        ) : null}
+        <Mono className="text-muted text-[10px] mt-3">
+          {new Date(existing.createdAt).toLocaleDateString("fr-TN", {
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+          })}
+        </Mono>
+      </Card>
+    );
+  }
+
+  return (
+    <Card raised className="px-4 py-4">
+      <Label className="mb-1">{existing ? "EDIT YOUR REVIEW" : "RATE THIS ORDER"}</Label>
+      <Body className="text-muted text-xs leading-4 mb-3">
+        How was your experience? Your rating helps other buyers find good suppliers.
+      </Body>
+
+      <StarRow rating={rating} interactive onChange={setRating} size={32} />
+
+      <View className="mt-4">
+        <Label className="mb-2">OPTIONAL · COMMENT</Label>
+        <View
+          className="rounded-2xl px-3.5"
+          style={{
+            backgroundColor: colors["background-elevated"],
+            borderWidth: 1.5,
+            borderColor: colors["border-soft"],
+          }}
+        >
+          <TextInput
+            className="py-3 font-body"
+            style={{ color: colors.foreground, minHeight: 70 }}
+            placeholder="Optional — what stood out?"
+            placeholderTextColor={colors["muted-soft"]}
+            value={comment}
+            onChangeText={setComment}
+            multiline
+            maxLength={1000}
+          />
+        </View>
+      </View>
+
+      {error ? (
+        <View
+          className="flex-row items-center gap-2 rounded-2xl px-3.5 py-2.5 mt-3"
+          style={{ backgroundColor: colors.error + "14" }}
+        >
+          <Ionicons name="alert-circle" size={16} color={colors.error} />
+          <Body className="text-sm flex-1" style={{ color: colors.error }}>
+            {error}
+          </Body>
+        </View>
+      ) : null}
+
+      <View className="flex-row gap-2 mt-3">
+        {existing ? (
+          <Pressable
+            onPress={() => {
+              setEditing(false);
+              setError(null);
+              setRating(existing.rating);
+              setComment(existing.comment ?? "");
+            }}
+            className="flex-1 active:opacity-85"
+          >
+            <View
+              className="rounded-2xl py-3 items-center"
+              style={{
+                backgroundColor: colors["background-elevated"],
+                borderWidth: 1.5,
+                borderColor: colors["border-soft"],
+              }}
+            >
+              <BodyBold className="text-foreground text-[13px]">Cancel</BodyBold>
+            </View>
+          </Pressable>
+        ) : null}
+        <Pressable
+          disabled={rating < 1 || upsert.isPending}
+          onPress={() => {
+            setError(null);
+            upsert.mutate({
+              orderId,
+              rating,
+              comment: comment.trim() || undefined,
+            });
+          }}
+          className={existing ? "flex-[2] active:opacity-90" : "flex-1 active:opacity-90"}
+          style={{ opacity: rating < 1 || upsert.isPending ? 0.5 : 1 }}
+        >
+          <View
+            className="rounded-2xl py-3 items-center flex-row justify-center gap-2"
+            style={{ backgroundColor: colors.primary }}
+          >
+            {upsert.isPending ? (
+              <ActivityIndicator color={colors.background} />
+            ) : (
+              <>
+                <Ionicons name="star" size={14} color={colors.background} />
+                <MonoBold
+                  className="text-[12px]"
+                  style={{ color: colors.background, letterSpacing: 1.2 }}
+                >
+                  {existing ? "UPDATE REVIEW" : "SUBMIT REVIEW"}
+                </MonoBold>
+              </>
+            )}
+          </View>
+        </Pressable>
+      </View>
+
+      {isEmpty ? (
+        <Body className="text-muted text-[10px] mt-3 text-center">
+          Tap stars to rate — required before submitting.
+        </Body>
+      ) : null}
+      {!isExpanded ? null : null /* keep var unused warning at bay */}
+    </Card>
+  );
+}
+
+/**
+ * StarRow — read-only by default, interactive when onChange is provided.
+ */
+function StarRow({
+  rating,
+  size = 18,
+  interactive = false,
+  onChange,
+}: {
+  rating: number;
+  size?: number;
+  interactive?: boolean;
+  onChange?: (n: number) => void;
+}) {
+  const colors = useColors();
+  return (
+    <View className="flex-row items-center gap-1.5">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const filled = n <= rating;
+        const Wrapper: React.ComponentType<{ children: React.ReactNode }> = interactive
+          ? ({ children }) => (
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onChange?.(n);
+                }}
+                hitSlop={4}
+                className="active:opacity-70"
+              >
+                {children}
+              </Pressable>
+            )
+          : ({ children }) => <View>{children}</View>;
+        return (
+          <Wrapper key={n}>
+            <Ionicons
+              name={filled ? "star" : "star-outline"}
+              size={size}
+              color={filled ? colors.primary : colors["muted-soft"]}
+            />
+          </Wrapper>
+        );
+      })}
+    </View>
   );
 }

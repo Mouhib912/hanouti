@@ -119,6 +119,25 @@ export type PushToken = typeof pushTokens.$inferSelect;
 export type InsertPushToken = typeof pushTokens.$inferInsert;
 
 /**
+ * Reviews — buyers rate suppliers after a delivered order.
+ * Unique on orderId ensures at most one review per order; ownership is
+ * enforced in the procedure (buyer must own the order, status delivered).
+ */
+export const reviews = mysqlTable("reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull().unique(),
+  buyerId: int("buyerId").notNull(),
+  providerId: int("providerId").notNull(),
+  rating: int("rating").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Review = typeof reviews.$inferSelect;
+export type InsertReview = typeof reviews.$inferInsert;
+
+/**
  * Cart items table - temporary storage for shopping cart
  */
 export const cartItems = mysqlTable("cartItems", {

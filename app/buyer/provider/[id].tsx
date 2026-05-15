@@ -34,6 +34,10 @@ export default function ProviderCatalogScreen() {
     { enabled: !!providerId },
   );
   const cartQ = trpc.cart.list.useQuery();
+  const reviewsQ = trpc.reviews.byProvider.useQuery(
+    { providerId, limit: 50 },
+    { enabled: !!providerId },
+  );
 
   const utils = trpc.useUtils();
   const addToCart = trpc.cart.add.useMutation({
@@ -177,6 +181,16 @@ export default function ProviderCatalogScreen() {
               </Body>
             </View>
           </Animated.View>
+        </View>
+
+        {/* Reviews */}
+        <View className="mt-5 px-5">
+          <ReviewsSection
+            providerId={providerId}
+            providerRating={providerQ.data.rating ?? null}
+            reviews={reviewsQ.data ?? []}
+            loading={reviewsQ.isLoading}
+          />
         </View>
 
         {/* Category pills */}
@@ -406,5 +420,156 @@ function CategoryPill({
         </MonoBold>
       </View>
     </Pressable>
+  );
+}
+
+type ReviewRow = {
+  id: number;
+  buyerId: number;
+  rating: number;
+  comment: string | null;
+  createdAt: Date;
+  buyerBusinessName: string | null;
+};
+
+/**
+ * ReviewsSection — collapsible card showing the aggregate rating, count,
+ * and the most recent reviews for a supplier.
+ */
+function ReviewsSection({
+  providerId: _providerId,
+  providerRating,
+  reviews,
+  loading,
+}: {
+  providerId: number;
+  providerRating: string | null;
+  reviews: ReviewRow[];
+  loading: boolean;
+}) {
+  const colors = useColors();
+  const [expanded, setExpanded] = useState(false);
+
+  const ratingNum = providerRating ? Number(providerRating) : null;
+  const count = reviews.length;
+  const visible = expanded ? reviews : reviews.slice(0, 3);
+
+  if (loading) {
+    return (
+      <Card raised className="px-4 py-4 items-center">
+        <ActivityIndicator color={colors.primary} />
+      </Card>
+    );
+  }
+
+  return (
+    <Card raised className="overflow-hidden">
+      <View className="px-4 pt-4 pb-3 flex-row items-end justify-between">
+        <View>
+          <Label className="mb-1.5">REVIEWS</Label>
+          {ratingNum != null && count > 0 ? (
+            <View className="flex-row items-end gap-2">
+              <DisplaySm className="text-foreground text-[28px]" style={{ color: colors.primary }}>
+                {ratingNum.toFixed(1)}
+              </DisplaySm>
+              <View className="pb-1">
+                <ReviewStarRow rating={Math.round(ratingNum)} size={14} />
+                <Mono className="text-muted text-[10px] mt-1">
+                  {count} REVIEW{count === 1 ? "" : "S"}
+                </Mono>
+              </View>
+            </View>
+          ) : (
+            <Body className="text-muted text-xs">No reviews yet.</Body>
+          )}
+        </View>
+        {ratingNum != null && count > 0 ? (
+          <Pill intent="ghost">
+            <Ionicons name="star" size={11} color={colors.primary} />
+            <MonoBold className="text-foreground text-[10px]">
+              {ratingNum.toFixed(2)}
+            </MonoBold>
+          </Pill>
+        ) : null}
+      </View>
+
+      {count > 0 ? (
+        <View
+          className="px-4 pt-3 pb-3 gap-3"
+          style={{ borderTopWidth: 1, borderTopColor: colors["border-soft"] }}
+        >
+          {visible.map((r) => (
+            <View key={r.id}>
+              <View className="flex-row items-center justify-between mb-1">
+                <View className="flex-row items-center gap-2">
+                  <View
+                    className="w-7 h-7 rounded-full items-center justify-center"
+                    style={{ backgroundColor: colors.foreground }}
+                  >
+                    <MonoBold
+                      className="text-[9px]"
+                      style={{ color: colors.background, letterSpacing: 0.6 }}
+                    >
+                      {(r.buyerBusinessName ?? "?")
+                        .split(/\s+/)
+                        .map((w) => w[0])
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()}
+                    </MonoBold>
+                  </View>
+                  <BodyBold className="text-foreground text-[12px]" numberOfLines={1}>
+                    {r.buyerBusinessName ?? "Anonymous"}
+                  </BodyBold>
+                </View>
+                <ReviewStarRow rating={r.rating} size={11} />
+              </View>
+              {r.comment ? (
+                <Body className="text-foreground text-[13px] leading-5 italic mt-1">
+                  “{r.comment}”
+                </Body>
+              ) : null}
+              <Mono className="text-muted text-[10px] mt-1.5">
+                {new Date(r.createdAt).toLocaleDateString("fr-TN", {
+                  year: "numeric",
+                  month: "short",
+                  day: "2-digit",
+                })}
+              </Mono>
+            </View>
+          ))}
+          {count > 3 ? (
+            <Pressable
+              onPress={() => setExpanded((e) => !e)}
+              className="active:opacity-60 self-start mt-1"
+            >
+              <MonoBold
+                className="text-[11px]"
+                style={{ color: colors.primary, letterSpacing: 1.2 }}
+              >
+                {expanded ? `SHOW LESS ↑` : `SHOW ALL ${count} →`}
+              </MonoBold>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+function ReviewStarRow({ rating, size = 12 }: { rating: number; size?: number }) {
+  const colors = useColors();
+  return (
+    <View className="flex-row items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Ionicons
+          key={n}
+          name={n <= rating ? "star" : "star-outline"}
+          size={size}
+          color={n <= rating ? colors.primary : colors["muted-soft"]}
+        />
+      ))}
+    </View>
   );
 }

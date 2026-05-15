@@ -236,6 +236,54 @@ export const appRouter = router({
       }),
   }),
 
+  // Review Routes — buyers rate suppliers after a delivered order.
+  reviews: router({
+    byProvider: publicProcedure
+      .input(z.object({ providerId: z.number(), limit: z.number().int().min(1).max(100).optional() }))
+      .query(({ input }) => db.listProviderReviews(input.providerId, input.limit ?? 50)),
+    forOrder: protectedProcedure
+      .input(z.object({ orderId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const order = await db.getOrder(input.orderId);
+        if (!order || (order.buyerId !== ctx.user.id && order.providerId !== ctx.user.id)) {
+          throw new Error("Order not found");
+        }
+        return db.getReviewByOrder(input.orderId);
+      }),
+    upsert: protectedProcedure
+      .input(
+        z.object({
+          orderId: z.number(),
+          rating: z.number().int().min(1).max(5),
+          comment: z.string().trim().max(1000).optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const order = await db.getOrder(input.orderId);
+        if (!order || order.buyerId !== ctx.user.id) {
+          throw new Error("Order not found");
+        }
+        if (order.status !== "delivered") {
+          throw new Error("You can only review an order once it's been delivered.");
+        }
+        const existing = await db.getReviewByOrder(input.orderId);
+        const comment = input.comment?.length ? input.comment : null;
+        if (existing) {
+          await db.updateReview(existing.id, input.rating, comment);
+        } else {
+          await db.createReview({
+            orderId: input.orderId,
+            buyerId: ctx.user.id,
+            providerId: order.providerId,
+            rating: input.rating,
+            comment,
+          });
+        }
+        await db.recomputeProviderRating(order.providerId);
+        return { ok: true };
+      }),
+  }),
+
   // Cart Routes
   cart: router({
     list: protectedProcedure.query(({ ctx }) => db.getBuyerCart(ctx.user.id)),

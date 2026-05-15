@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull, like } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -10,11 +10,13 @@ import {
   cartItems,
   buyerAddresses,
   pushTokens,
+  reviews,
   InsertUserProfile,
   InsertCategory,
   InsertProduct,
   InsertOrder,
   InsertCartItem,
+  InsertReview,
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -724,4 +726,80 @@ export async function removePushToken(userId: number, token: string) {
   await db
     .delete(pushTokens)
     .where(and(eq(pushTokens.token, token), eq(pushTokens.userId, userId)));
+}
+
+/**
+ * REVIEW FUNCTIONS
+ */
+
+export async function getReviewByOrder(orderId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(reviews)
+    .where(eq(reviews.orderId, orderId))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+export async function listProviderReviews(providerId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  // Join the buyer's businessName so the supplier page can attribute reviews
+  // without an extra roundtrip per review.
+  return db
+    .select({
+      id: reviews.id,
+      orderId: reviews.orderId,
+      buyerId: reviews.buyerId,
+      providerId: reviews.providerId,
+      rating: reviews.rating,
+      comment: reviews.comment,
+      createdAt: reviews.createdAt,
+      updatedAt: reviews.updatedAt,
+      buyerBusinessName: userProfiles.businessName,
+    })
+    .from(reviews)
+    .leftJoin(userProfiles, eq(userProfiles.userId, reviews.buyerId))
+    .where(eq(reviews.providerId, providerId))
+    .orderBy(desc(reviews.createdAt))
+    .limit(limit);
+}
+
+export async function createReview(data: InsertReview) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const _result = await db.insert(reviews).values(data);
+  return lastInsertId(_result);
+}
+
+export async function updateReview(reviewId: number, rating: number, comment: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(reviews)
+    .set({ rating, comment })
+    .where(eq(reviews.id, reviewId));
+}
+
+/**
+ * Recompute and persist a provider's rating (average across all their reviews).
+ * Called after any review write. With no reviews the rating falls back to "5.00".
+ */
+export async function recomputeProviderRating(providerId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const rows = await db
+    .select({ rating: reviews.rating })
+    .from(reviews)
+    .where(eq(reviews.providerId, providerId));
+  const avg =
+    rows.length > 0
+      ? rows.reduce((sum, r) => sum + r.rating, 0) / rows.length
+      : 5;
+  await db
+    .update(userProfiles)
+    .set({ rating: avg.toFixed(2) })
+    .where(eq(userProfiles.userId, providerId));
 }
